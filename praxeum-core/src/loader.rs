@@ -1,6 +1,6 @@
 use crate::error::PraxeumError;
 use crate::model::exercise::Exercise;
-use crate::validator::validate_exercises_with_source;
+use crate::validator::{validate_exercises_with_source, validation_report, ValidationIssue};
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,6 +16,21 @@ pub enum DataFormat {
 
 /// Helper for loading exercises from files or raw strings.
 pub struct ExerciseLoader;
+
+/// Result of a preflight validation pass.
+#[derive(Debug, Clone)]
+pub struct PreflightReport {
+    pub source: Option<String>,
+    pub format: DataFormat,
+    pub exercise_count: usize,
+    pub issues: Vec<ValidationIssue>,
+}
+
+impl PreflightReport {
+    pub fn is_success(&self) -> bool {
+        self.issues.is_empty()
+    }
+}
 
 #[derive(Debug, Deserialize)]
 struct TomlRoot {
@@ -71,6 +86,47 @@ impl ExerciseLoader {
         let resolved_format = resolve_format(None, contents, format)?;
         let mut exercises = parse_exercises(contents, resolved_format)?;
         run_validation(&mut exercises, None)
+    }
+
+    /// Preflight validation for a file without loading into an engine.
+    pub fn preflight_path(
+        path: impl AsRef<Path>,
+        format: DataFormat,
+    ) -> Result<PreflightReport, PraxeumError> {
+        let path = path.as_ref();
+        let contents = fs::read_to_string(path)?;
+        let resolved_format = resolve_format(Some(path), &contents, format)?;
+        let mut exercises = parse_exercises(&contents, resolved_format)?;
+        Ok(build_preflight(
+            &mut exercises,
+            resolved_format,
+            path.to_str(),
+        ))
+    }
+
+    /// Preflight validation for in-memory strings.
+    pub fn preflight_str(
+        contents: &str,
+        format: DataFormat,
+        source: Option<&str>,
+    ) -> Result<PreflightReport, PraxeumError> {
+        let resolved_format = resolve_format(None, contents, format)?;
+        let mut exercises = parse_exercises(contents, resolved_format)?;
+        Ok(build_preflight(&mut exercises, resolved_format, source))
+    }
+}
+
+fn build_preflight(
+    exercises: &mut [Exercise],
+    format: DataFormat,
+    source: Option<&str>,
+) -> PreflightReport {
+    let report = validation_report(exercises, source);
+    PreflightReport {
+        source: source.map(ToOwned::to_owned),
+        format,
+        exercise_count: exercises.len(),
+        issues: report.issues,
     }
 }
 

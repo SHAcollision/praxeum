@@ -12,7 +12,12 @@ praxeum-core = { path = "../praxeum-core" }
 inquire = "0.7"
 crossterm = "0.27"
 owo-colors = "4"
+rand = { version = "0.8", features = ["std"] }
 
 [[bin]]
 name = "praxeum-cli"
 path = "src/main.rs"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+tempfile = "3"

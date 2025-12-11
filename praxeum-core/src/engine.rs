@@ -33,6 +33,16 @@ impl ExerciseEngine {
         self.exercises.is_empty()
     }
 
+    /// Current cursor position (0-based).
+    pub fn position(&self) -> usize {
+        self.index
+    }
+
+    /// Return how many exercises remain from the current cursor.
+    pub fn remaining(&self) -> usize {
+        self.exercises.len().saturating_sub(self.index)
+    }
+
     /// Reset the internal cursor to the first exercise.
     pub fn reset(&mut self) {
         self.index = 0;
@@ -43,14 +53,33 @@ impl ExerciseEngine {
         self.exercises.get(self.index)
     }
 
+    /// Get an exercise by id.
+    pub fn by_id(&self, id: &str) -> Option<&Exercise> {
+        self.exercises.iter().find(|ex| ex.id() == id)
+    }
+
+    /// Get an exercise at a specific index.
+    pub fn at(&self, index: usize) -> Option<&Exercise> {
+        self.exercises.get(index)
+    }
+
     /// Advance to the next exercise and return it.
     pub fn advance(&mut self) -> Option<&Exercise> {
         if self.index + 1 < self.exercises.len() {
             self.index += 1;
             self.exercises.get(self.index)
         } else {
+            self.index = self.exercises.len();
             None
         }
+    }
+
+    /// Evaluate an answer against the exercise at the current cursor.
+    pub fn answer_current(&mut self, answer: &Answer) -> Result<Evaluation, PraxeumError> {
+        let exercise = self.current().ok_or(PraxeumError::NoExercises)?;
+        let eval = self.evaluate(exercise, answer)?;
+        self.advance();
+        Ok(eval)
     }
 
     /// Evaluate an answer for the given exercise.

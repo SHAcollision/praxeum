@@ -49,6 +49,11 @@ impl ValidationErrorReport {
     pub fn new(source: Option<String>, issues: Vec<ValidationIssue>) -> Self {
         ValidationErrorReport { source, issues }
     }
+
+    /// Whether the validation produced no issues.
+    pub fn is_clean(&self) -> bool {
+        self.issues.is_empty()
+    }
 }
 
 impl fmt::Display for ValidationErrorReport {
@@ -79,6 +84,16 @@ pub fn validate_exercises_with_source(
     exercises: &[Exercise],
     source: Option<&str>,
 ) -> Result<(), ValidationErrorReport> {
+    let report = validation_report(exercises, source);
+    if report.is_clean() {
+        Ok(())
+    } else {
+        Err(report)
+    }
+}
+
+/// Produce a validation report without short-circuiting on errors.
+pub fn validation_report(exercises: &[Exercise], source: Option<&str>) -> ValidationErrorReport {
     let mut issues = Vec::new();
     let mut seen_ids = HashSet::new();
 
@@ -94,14 +109,7 @@ pub fn validate_exercises_with_source(
         validate_exercise(exercise, &mut issues);
     }
 
-    if issues.is_empty() {
-        Ok(())
-    } else {
-        Err(ValidationErrorReport::new(
-            source.map(ToOwned::to_owned),
-            issues,
-        ))
-    }
+    ValidationErrorReport::new(source.map(ToOwned::to_owned), issues)
 }
 
 fn validate_exercise(exercise: &Exercise, issues: &mut Vec<ValidationIssue>) {
