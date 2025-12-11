@@ -3,8 +3,9 @@
 Praxeum is a Rust-based learning engine for Austrian economics exercises. The core crate is UI-agnostic so it can power a CLI today and Dioxus-based mobile/desktop frontends later.
 
 ## Layout
-- `praxeum_core/`: Library crate with engine, loader, and CLI binary `praxeum_cli`.
-- `praxeum_core/examples/`: Starter TOML content used by the CLI demo.
+- `praxeum-core/`: Library crate with engine and loader.
+- `praxeum-core/examples/`: Starter TOML content used by the CLI demo.
+- `praxeum-cli/`: Binary crate that consumes `praxeum-core`.
 - `roadmap.md`: High-level milestones and priorities.
 
 ## Getting started
@@ -15,11 +16,11 @@ Praxeum is a Rust-based learning engine for Austrian economics exercises. The co
    ```
 3. Run the interactive CLI against the bundled example set:
    ```bash
-   cargo run -p praxeum_core --bin praxeum_cli
+   cargo run -p praxeum-cli
    ```
 4. Provide your own exercise file (TOML or JSON) with `--file`:
    ```bash
-   cargo run -p praxeum_core --bin praxeum_cli -- --file path/to/exercises.toml
+   cargo run -p praxeum-cli -- --file path/to/exercises.toml
    ```
 
 ## Linting and tests
@@ -28,7 +29,7 @@ Praxeum is a Rust-based learning engine for Austrian economics exercises. The co
 - Execute tests: `cargo test`
 
 ## Content format
-Exercises are stored as arrays under the `exercise` key in TOML (or a top-level JSON array). See `praxeum_core/examples/exercises_basic.toml` for a complete reference of the three exercise kinds (classification, multiple-choice, scenario).
+Exercises are stored as arrays under the `exercise` key in TOML (or a top-level JSON array). See `praxeum-core/examples/exercises_basic.toml` for a complete reference of the three exercise kinds (classification, multiple-choice, scenario).
 
 ## Contributing
 - Avoid global statics; keep engine state instance-scoped for multi-platform builds.

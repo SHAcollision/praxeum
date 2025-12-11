@@ -1,8 +1,7 @@
 use clap::Parser;
-use praxeum_core::{
-    loader::{default_examples_path, DataFormat, ExerciseLoader},
-    Answer, Exercise, ExerciseEngine,
-};
+use praxeum_core::loader::{DataFormat, ExerciseLoader};
+use praxeum_core::model::{answer::Answer, exercise::Exercise};
+use praxeum_core::ExerciseEngine;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
@@ -18,7 +17,9 @@ struct Cli {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let path = cli.file.unwrap_or_else(default_examples_path);
+    let path = cli
+        .file
+        .unwrap_or_else(praxeum_core::loader::default_examples_path);
 
     println!("Loading exercises from: {}", path.display());
     let exercises = ExerciseLoader::load_from_path(&path, DataFormat::Auto)?;

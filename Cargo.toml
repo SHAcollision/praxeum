@@ -1,5 +1,5 @@
 [workspace]
-members = ["praxeum_core"]
+members = ["praxeum-core", "praxeum-cli"]
 resolver = "2"
 
 [workspace.package]

@@ -10,8 +10,12 @@ An implementation plan for a Rust-based learning platform focused on Austrian ec
 
 ## Milestones
 
+## Status
+- **Current milestone:** M2 (Data Model & Formats) — data types and loader/engine exist, but validation helpers and telemetry/metrics from later milestones are still pending.
+- **Completed:** M1 (Repository Bootstrap) — workspace scaffolded with core library and CLI demo entry point.
+
 ### M1: Repository Bootstrap
-- Initialize workspace with `praxeum_core` crate and CLI binary target.
+- Initialize workspace with `praxeum-core` crate and a `praxeum-cli` binary crate.
 - Configure Rust toolchain metadata (edition 2021), linting defaults, and CI stubs (fmt/clippy/test).
 - Document contribution basics in `README.md` (how to build, run CLI, and add content).
 
