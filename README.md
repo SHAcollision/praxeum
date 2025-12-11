@@ -14,10 +14,11 @@ Praxeum is a Rust-based learning engine for Austrian economics exercises. The co
    ```bash
    cargo build
    ```
-3. Run the interactive CLI against the bundled example set:
+3. Run the interactive CLI against the bundled example set for a streak-based score chase:
    ```bash
    cargo run -p praxeum-cli
    ```
+   The CLI shows combo streaks, speed bonuses, and a session summary so you can sprint through the positions.
 4. Provide your own exercise file (TOML or JSON) with `--file`:
    ```bash
    cargo run -p praxeum-cli -- --file path/to/exercises.toml
@@ -29,7 +30,7 @@ Praxeum is a Rust-based learning engine for Austrian economics exercises. The co
 - Execute tests: `cargo test`
 
 ## Content format
-Exercises are stored as arrays under the `exercise` key in TOML (or a top-level JSON array). See `praxeum-core/examples/exercises_basic.toml` for a complete reference of the three exercise kinds (classification, multiple-choice, scenario).
+Exercises are stored as arrays under the `exercise` key in TOML (or a top-level JSON array). See `praxeum-core/examples/exercises_basic.toml` for a complete reference of the three exercise kinds (classification, multiple-choice, scenario) along with fast-paced Austrian econ drills (action vs. event, means–ends matching, opportunity cost snaps, exchange sequences, socialist calculation, intervention cascades).
 
 ## Contributing
 - Avoid global statics; keep engine state instance-scoped for multi-platform builds.

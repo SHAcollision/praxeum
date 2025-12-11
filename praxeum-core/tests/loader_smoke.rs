@@ -9,5 +9,5 @@ fn loads_examples_and_counts_exercises() {
     assert!(!exercises.is_empty(), "example set should not be empty");
 
     let engine = ExerciseEngine::new(exercises);
-    assert_eq!(engine.len(), 3);
+    assert_eq!(engine.len(), 6);
 }
