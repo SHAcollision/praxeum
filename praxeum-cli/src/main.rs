@@ -1,9 +1,16 @@
 use clap::Parser;
+use crossterm::{
+    cursor,
+    terminal::{Clear, ClearType},
+    ExecutableCommand,
+};
 use inquire::{MultiSelect, Select};
+use owo_colors::OwoColorize;
 use praxeum_core::loader::{DataFormat, ExerciseLoader};
 use praxeum_core::model::{answer::Answer, exercise::Exercise};
 use praxeum_core::{Evaluation, ExerciseEngine};
 use std::fmt;
+use std::io::{self, stdout, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -28,6 +35,14 @@ struct SessionStats {
 }
 
 impl SessionStats {
+    fn avg_score(&self) -> f32 {
+        if self.total == 0 {
+            0.0
+        } else {
+            (self.total_score / self.total as f32) * 100.0
+        }
+    }
+
     fn register(&mut self, eval: &Evaluation, elapsed: Duration) -> u32 {
         self.total += 1;
         self.total_score += eval.score;
@@ -47,16 +62,13 @@ impl SessionStats {
     }
 
     fn print_summary(&self) {
-        println!("\n== Session Summary ==");
+        println!("\n{}", "Session Summary".bold().green());
+        println!("{}", line());
         println!(
-            "Exercises played: {} | Correct: {} | Avg score: {:.0}%",
+            "Exercises: {} | Correct: {} | Avg score: {:.0}%",
             self.total,
             self.correct,
-            if self.total == 0 {
-                0.0
-            } else {
-                (self.total_score / self.total as f32) * 100.0
-            }
+            self.avg_score()
         );
         println!(
             "Points: {} | Best streak: {} | Total time: {:.1}s",
@@ -65,6 +77,77 @@ impl SessionStats {
             self.total_time.as_secs_f32()
         );
     }
+}
+
+fn clear_screen() {
+    let mut out = stdout();
+    let _ = out.execute(Clear(ClearType::All));
+    let _ = out.execute(cursor::MoveTo(0, 0));
+}
+
+fn line() -> String {
+    "─".repeat(64)
+}
+
+fn render_banner(total: usize, stats: &SessionStats, position: usize, title: &str) {
+    clear_screen();
+    println!("{}", "Praxeum CLI".bold().green());
+    println!("{}", "Positional drills for Austrian economics".dimmed());
+    println!("{}", line());
+    println!(
+        "{} {}/{}   {} {}   {} {:.0}%   {} {}",
+        "Position".bold(),
+        position,
+        total,
+        "Streak".bold(),
+        stats.streak,
+        "Avg".bold(),
+        stats.avg_score(),
+        "Points".bold(),
+        stats.points
+    );
+    println!("{}", title.bold().cyan());
+    println!("{}", line());
+    println!();
+}
+
+fn render_result_footer(eval: &Evaluation, elapsed: Duration, awarded: u32, streak: usize) {
+    let status_icon = if eval.correct {
+        format!("{}", "✓".green().bold())
+    } else {
+        format!("{}", "✗".red().bold())
+    };
+
+    let status_text = if eval.correct {
+        format!("{}", "On point".green().bold())
+    } else {
+        format!("{}", "Keep refining".yellow().bold())
+    };
+
+    println!("{}", line());
+    println!(
+        "{} {} ({:.0}% score, {:.1}s)",
+        status_icon,
+        status_text,
+        eval.score * 100.0,
+        elapsed.as_secs_f32()
+    );
+    println!("{}", eval.feedback);
+    println!();
+    println!(
+        "{} +{} pts | streak {}",
+        "Momentum".bold().yellow(),
+        awarded,
+        streak
+    );
+}
+
+fn pause_for_next() -> io::Result<()> {
+    print!("\nPress Enter for the next position...");
+    io::stdout().flush()?;
+    let mut buf = String::new();
+    io::stdin().read_line(&mut buf)?;
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -84,25 +167,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let engine = ExerciseEngine::new(exercises);
     let mut stats = SessionStats::default();
 
-    println!(
-        "Loaded {} exercises. \u{26a1} Race the clock and chain streaks!\n",
-        engine.len()
-    );
-
     for (idx, exercise) in engine.iter().enumerate() {
-        println!("== Position {}/{} ==", idx + 1, engine.len());
+        render_banner(engine.len(), &stats, idx + 1, exercise.title());
         let (eval, elapsed) = run_exercise(&engine, exercise)?;
         let awarded = stats.register(&eval, elapsed);
-        println!(
-            "\n>>> +{} pts | streak {} | time {:.1}s | score {:.0}%\n",
-            awarded,
-            stats.streak,
-            elapsed.as_secs_f32(),
-            eval.score * 100.0
-        );
-        println!("\n---\n");
+        render_result_footer(&eval, elapsed, awarded, stats.streak);
+        if idx + 1 < engine.len() {
+            pause_for_next()?;
+        }
     }
 
+    clear_screen();
     stats.print_summary();
 
     Ok(())
@@ -112,8 +187,12 @@ fn run_exercise(
     engine: &ExerciseEngine,
     exercise: &Exercise,
 ) -> Result<(Evaluation, Duration), Box<dyn std::error::Error>> {
-    println!("# {} [{}]", exercise.title(), exercise.id());
-    println!("Ready? Fast, clean judgments get max points.\n");
+    println!("{} {}", "ID".bold().cyan(), exercise.id().dimmed());
+    println!(
+        "{}",
+        "Ready? Fast, clean judgments get max points.".dimmed()
+    );
+    println!();
 
     let started = Instant::now();
     let eval = match exercise {
@@ -123,13 +202,15 @@ fn run_exercise(
             items,
             ..
         } => {
-            println!("{}", prompt);
-            println!();
-            println!("Use ↑ ↓ to pick a category, Enter to lock it.");
+            println!("{}", prompt.bold());
+            println!(
+                "{}",
+                "Use ↑ ↓ to pick a category, Enter to lock it.".dimmed()
+            );
             println!();
             let mut indices = Vec::with_capacity(items.len());
             for (i, item) in items.iter().enumerate() {
-                println!("Item {}: {}", i + 1, item.text);
+                println!("{} {}", format!("Item {}:", i + 1).bold(), item.text);
                 let idx = select_index(&format!("Category for item {}", i + 1), categories)?;
                 indices.push(idx);
             }
@@ -143,7 +224,7 @@ fn run_exercise(
             multi_select,
             ..
         } => {
-            println!("{}", prompt);
+            println!("{}", prompt.bold());
             println!();
             let indices = if *multi_select {
                 multi_pick_indices("Pick all correct answers", options)?
@@ -160,7 +241,7 @@ fn run_exercise(
             choices,
             ..
         } => {
-            println!("{}", description);
+            println!("{}", description.bold());
             println!();
             println!("{}", prompt);
             println!();
@@ -176,10 +257,7 @@ fn run_exercise(
     };
 
     let elapsed = started.elapsed();
-    println!(
-        "\nResult: correct = {}, score = {:.2}\n{}",
-        eval.correct, eval.score, eval.feedback
-    );
+    println!("\n{}", line());
     Ok((eval, elapsed))
 }
 

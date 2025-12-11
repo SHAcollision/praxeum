@@ -14,7 +14,7 @@ Praxeum is a Rust-based learning engine for Austrian economics exercises. The co
    ```bash
    cargo build
    ```
-3. Run the interactive CLI against the bundled example set for a streak-based score chase (arrow keys/space/enter navigation):
+3. Run the interactive CLI against the bundled example set for a streak-based score chase (arrow keys/space/enter navigation and a clean single-screen flow between positions):
    ```bash
    cargo run -p praxeum-cli
    ```
