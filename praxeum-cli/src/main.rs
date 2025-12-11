@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use crossterm::{
     cursor,
     terminal::{Clear, ClearType},
@@ -6,9 +6,10 @@ use crossterm::{
 };
 use inquire::{MultiSelect, Select};
 use owo_colors::OwoColorize;
-use praxeum_core::loader::{DataFormat, ExerciseLoader};
+use praxeum_core::loader::{default_examples_path, DataFormat, ExerciseLoader, PreflightReport};
 use praxeum_core::model::{answer::Answer, exercise::Exercise};
-use praxeum_core::{Evaluation, ExerciseEngine};
+use praxeum_core::{Evaluation, ExerciseEngine, PraxeumError, SessionEvent, SessionTracker};
+use rand::seq::SliceRandom;
 use std::fmt;
 use std::io::{self, stdout, Write};
 use std::path::PathBuf;
@@ -21,62 +22,134 @@ struct Cli {
     /// Path to exercises file (TOML or JSON).
     #[arg(short, long)]
     file: Option<PathBuf>,
+
+    /// Input format (default: infer from extension or content).
+    #[arg(long, value_enum, default_value_t = FormatArg::Auto)]
+    format: FormatArg,
+
+    /// Shuffle exercises before starting.
+    #[arg(long, default_value_t = false)]
+    shuffle: bool,
+
+    /// Only include exercises whose id starts with the prefix.
+    #[arg(long)]
+    id_prefix: Option<String>,
+
+    /// Limit how many exercises to play.
+    #[arg(long)]
+    limit: Option<usize>,
+
+    /// Validate the file and exit without running the interactive flow.
+    #[arg(long, default_value_t = false)]
+    validate_only: bool,
 }
 
-#[derive(Default)]
-struct SessionStats {
-    total: usize,
-    correct: usize,
-    streak: usize,
-    best_streak: usize,
-    total_score: f32,
-    total_time: Duration,
-    points: u32,
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum FormatArg {
+    Auto,
+    Json,
+    Toml,
 }
 
-impl SessionStats {
-    fn avg_score(&self) -> f32 {
-        if self.total == 0 {
-            0.0
-        } else {
-            (self.total_score / self.total as f32) * 100.0
+impl From<FormatArg> for DataFormat {
+    fn from(value: FormatArg) -> Self {
+        match value {
+            FormatArg::Auto => DataFormat::Auto,
+            FormatArg::Json => DataFormat::Json,
+            FormatArg::Toml => DataFormat::Toml,
+        }
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli = Cli::parse();
+    let path = cli.file.clone().unwrap_or_else(default_examples_path);
+
+    let format: DataFormat = cli.format.into();
+    let preflight = ExerciseLoader::preflight_path(&path, format)?;
+    print_preflight(&preflight);
+
+    if !preflight.is_success() {
+        if cli.validate_only {
+            std::process::exit(1);
+        }
+        return Err(Box::new(PraxeumError::Validation(
+            praxeum_core::validator::ValidationErrorReport::new(
+                preflight.source.clone(),
+                preflight.issues.clone(),
+            ),
+        )));
+    } else if cli.validate_only {
+        return Ok(());
+    }
+
+    let mut exercises = ExerciseLoader::load_from_path(&path, format)?;
+    apply_filters(&mut exercises, &cli);
+
+    if exercises.is_empty() {
+        eprintln!("No exercises after applying filters.");
+        return Ok(());
+    }
+
+    let engine = ExerciseEngine::new(exercises);
+    let mut tracker = SessionTracker::new(engine.len());
+
+    for (idx, exercise) in engine.iter().enumerate() {
+        render_banner(engine.len(), &tracker, idx + 1, exercise.title());
+        let (eval, elapsed) = run_exercise(&engine, exercise)?;
+        let answered_event = tracker.record_answer(exercise, &eval, elapsed.as_millis());
+
+        let SessionEvent::Answered { outcome, metrics } = answered_event else {
+            unreachable!();
+        };
+
+        render_result_footer(&eval, elapsed, outcome.points_awarded, outcome.streak);
+        if idx + 1 < engine.len() {
+            pause_for_next()?;
+        }
+
+        if metrics.answered >= engine.len() {
+            break;
         }
     }
 
-    fn register(&mut self, eval: &Evaluation, elapsed: Duration) -> u32 {
-        self.total += 1;
-        self.total_score += eval.score;
-        self.total_time += elapsed;
+    clear_screen();
+    print_summary(&tracker);
 
-        if eval.correct {
-            self.correct += 1;
-            self.streak += 1;
-        } else {
-            self.streak = 0;
+    Ok(())
+}
+
+fn apply_filters(exercises: &mut Vec<Exercise>, cli: &Cli) {
+    if let Some(prefix) = &cli.id_prefix {
+        exercises.retain(|ex| ex.id().starts_with(prefix));
+    }
+
+    if cli.shuffle {
+        exercises.shuffle(&mut rand::thread_rng());
+    }
+
+    if let Some(limit) = cli.limit {
+        exercises.truncate(limit.min(exercises.len()));
+    }
+}
+
+fn print_preflight(report: &PreflightReport) {
+    println!(
+        "Validating {} (format: {:?})",
+        report.source.as_deref().unwrap_or("<memory>"),
+        report.format
+    );
+
+    if report.is_success() {
+        println!("{}", "✓ Schema validation passed".green());
+        println!("Exercises detected: {}", report.exercise_count);
+    } else {
+        println!("{}", "Validation issues found:".red().bold());
+        for issue in &report.issues {
+            println!("  - {}", issue);
         }
-
-        self.best_streak = self.best_streak.max(self.streak);
-        let awarded = award_points(eval, elapsed, self.streak);
-        self.points = self.points.saturating_add(awarded);
-        awarded
     }
-
-    fn print_summary(&self) {
-        println!("\n{}", "Session Summary".bold().green());
-        println!("{}", line());
-        println!(
-            "Exercises: {} | Correct: {} | Avg score: {:.0}%",
-            self.total,
-            self.correct,
-            self.avg_score()
-        );
-        println!(
-            "Points: {} | Best streak: {} | Total time: {:.1}s",
-            self.points,
-            self.best_streak,
-            self.total_time.as_secs_f32()
-        );
-    }
+    println!();
 }
 
 fn clear_screen() {
@@ -89,8 +162,9 @@ fn line() -> String {
     "─".repeat(64)
 }
 
-fn render_banner(total: usize, stats: &SessionStats, position: usize, title: &str) {
+fn render_banner(total: usize, tracker: &SessionTracker, position: usize, title: &str) {
     clear_screen();
+    let metrics = tracker.metrics();
     println!("{}", "Praxeum CLI".bold().green());
     println!("{}", "Positional drills for Austrian economics".dimmed());
     println!("{}", line());
@@ -100,11 +174,11 @@ fn render_banner(total: usize, stats: &SessionStats, position: usize, title: &st
         position,
         total,
         "Streak".bold(),
-        stats.streak,
+        metrics.current_streak,
         "Avg".bold(),
-        stats.avg_score(),
+        tracker.average_score() * 100.0,
         "Points".bold(),
-        stats.points
+        tracker.points()
     );
     println!("{}", title.bold().cyan());
     println!("{}", line());
@@ -147,39 +221,6 @@ fn pause_for_next() -> io::Result<()> {
     io::stdout().flush()?;
     let mut buf = String::new();
     io::stdin().read_line(&mut buf)?;
-    Ok(())
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = Cli::parse();
-
-    let path = cli
-        .file
-        .unwrap_or_else(praxeum_core::loader::default_examples_path);
-
-    println!("Loading exercises from: {}", path.display());
-    let exercises = ExerciseLoader::load_from_path(&path, DataFormat::Auto)?;
-    if exercises.is_empty() {
-        eprintln!("No exercises loaded.");
-        return Ok(());
-    }
-
-    let engine = ExerciseEngine::new(exercises);
-    let mut stats = SessionStats::default();
-
-    for (idx, exercise) in engine.iter().enumerate() {
-        render_banner(engine.len(), &stats, idx + 1, exercise.title());
-        let (eval, elapsed) = run_exercise(&engine, exercise)?;
-        let awarded = stats.register(&eval, elapsed);
-        render_result_footer(&eval, elapsed, awarded, stats.streak);
-        if idx + 1 < engine.len() {
-            pause_for_next()?;
-        }
-    }
-
-    clear_screen();
-    stats.print_summary();
-
     Ok(())
 }
 
@@ -311,16 +352,21 @@ fn multi_pick_indices(
     Ok(picked.into_iter().map(|item| item.index).collect())
 }
 
-fn award_points(eval: &Evaluation, elapsed: Duration, streak: usize) -> u32 {
-    let base = (eval.score * 120.0).round() as u32 + if eval.correct { 50 } else { 15 };
-    let speed_bonus = if elapsed.as_secs_f32() < 20.0 {
-        15
-    } else if elapsed.as_secs_f32() < 40.0 {
-        8
-    } else {
-        0
-    };
-    let streak_bonus = streak.saturating_sub(1) as u32 * 5;
-
-    base + speed_bonus + streak_bonus
+fn print_summary(tracker: &SessionTracker) {
+    let metrics = tracker.metrics();
+    println!("\n{}", "Session Summary".bold().green());
+    println!("{}", line());
+    println!(
+        "Exercises: {} | Correct: {} | Avg score: {:.0}%",
+        metrics.answered,
+        metrics.correct,
+        tracker.average_score() * 100.0
+    );
+    let total_secs = metrics.total_duration_ms as f32 / 1000.0;
+    println!(
+        "Points: {} | Best streak: {} | Total time: {:.1}s",
+        tracker.points(),
+        metrics.longest_streak,
+        total_secs
+    );
 }

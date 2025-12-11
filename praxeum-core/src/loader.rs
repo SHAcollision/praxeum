@@ -1,5 +1,6 @@
 use crate::error::PraxeumError;
 use crate::model::exercise::Exercise;
+use crate::validator::{validate_exercises_with_source, validation_report, ValidationIssue};
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,12 +10,27 @@ use std::path::{Path, PathBuf};
 pub enum DataFormat {
     Json,
     Toml,
-    /// Infer from file extension.
+    /// Infer from file extension or content.
     Auto,
 }
 
-/// Helper for loading exercises from files.
+/// Helper for loading exercises from files or raw strings.
 pub struct ExerciseLoader;
+
+/// Result of a preflight validation pass.
+#[derive(Debug, Clone)]
+pub struct PreflightReport {
+    pub source: Option<String>,
+    pub format: DataFormat,
+    pub exercise_count: usize,
+    pub issues: Vec<ValidationIssue>,
+}
+
+impl PreflightReport {
+    pub fn is_success(&self) -> bool {
+        self.issues.is_empty()
+    }
+}
 
 #[derive(Debug, Deserialize)]
 struct TomlRoot {
@@ -22,9 +38,9 @@ struct TomlRoot {
 }
 
 impl ExerciseLoader {
-    /// Load exercises from a file path.
+    /// Load and validate exercises from a file path.
     ///
-    /// JSON format: top-level array of exercises.
+    /// JSON format: top-level array of exercises or `{ "exercises": [...] }`.
     ///
     /// TOML format:
     /// ```toml
@@ -39,37 +55,130 @@ impl ExerciseLoader {
     ) -> Result<Vec<Exercise>, PraxeumError> {
         let path = path.as_ref();
         let contents = fs::read_to_string(path)?;
-        let fmt = match format {
-            DataFormat::Auto => infer_format(path)?,
-            other => other,
-        };
-
-        let exercises = match fmt {
-            DataFormat::Json => {
-                // JSON: either a bare array or a root { "exercises": [...] }
-                if contents.trim_start().starts_with('[') {
-                    serde_json::from_str::<Vec<Exercise>>(&contents)?
-                } else {
-                    #[derive(Deserialize)]
-                    struct JsonRoot {
-                        exercises: Vec<Exercise>,
-                    }
-                    let root: JsonRoot = serde_json::from_str(&contents)?;
-                    root.exercises
-                }
-            }
-            DataFormat::Toml => {
-                let root: TomlRoot = toml::from_str(&contents)?;
-                root.exercise
-            }
-            DataFormat::Auto => unreachable!(),
-        };
-
+        let resolved_format = resolve_format(Some(path), &contents, format)?;
+        let mut exercises = parse_exercises(&contents, resolved_format)?;
+        run_validation(&mut exercises, path.to_str())?;
         Ok(exercises)
+    }
+
+    /// Load exercises from an in-memory string, validating them before return.
+    pub fn load_from_str(
+        contents: &str,
+        format: DataFormat,
+    ) -> Result<Vec<Exercise>, PraxeumError> {
+        let resolved_format = resolve_format(None, contents, format)?;
+        let mut exercises = parse_exercises(contents, resolved_format)?;
+        run_validation(&mut exercises, None)?;
+        Ok(exercises)
+    }
+
+    /// Validate exercises from a file path without returning them.
+    pub fn validate_path(path: impl AsRef<Path>, format: DataFormat) -> Result<(), PraxeumError> {
+        let path = path.as_ref();
+        let contents = fs::read_to_string(path)?;
+        let resolved_format = resolve_format(Some(path), &contents, format)?;
+        let mut exercises = parse_exercises(&contents, resolved_format)?;
+        run_validation(&mut exercises, path.to_str())
+    }
+
+    /// Validate exercises from an in-memory string.
+    pub fn validate_str(contents: &str, format: DataFormat) -> Result<(), PraxeumError> {
+        let resolved_format = resolve_format(None, contents, format)?;
+        let mut exercises = parse_exercises(contents, resolved_format)?;
+        run_validation(&mut exercises, None)
+    }
+
+    /// Preflight validation for a file without loading into an engine.
+    pub fn preflight_path(
+        path: impl AsRef<Path>,
+        format: DataFormat,
+    ) -> Result<PreflightReport, PraxeumError> {
+        let path = path.as_ref();
+        let contents = fs::read_to_string(path)?;
+        let resolved_format = resolve_format(Some(path), &contents, format)?;
+        let mut exercises = parse_exercises(&contents, resolved_format)?;
+        Ok(build_preflight(
+            &mut exercises,
+            resolved_format,
+            path.to_str(),
+        ))
+    }
+
+    /// Preflight validation for in-memory strings.
+    pub fn preflight_str(
+        contents: &str,
+        format: DataFormat,
+        source: Option<&str>,
+    ) -> Result<PreflightReport, PraxeumError> {
+        let resolved_format = resolve_format(None, contents, format)?;
+        let mut exercises = parse_exercises(contents, resolved_format)?;
+        Ok(build_preflight(&mut exercises, resolved_format, source))
     }
 }
 
-fn infer_format(path: &Path) -> Result<DataFormat, PraxeumError> {
+fn build_preflight(
+    exercises: &mut [Exercise],
+    format: DataFormat,
+    source: Option<&str>,
+) -> PreflightReport {
+    let report = validation_report(exercises, source);
+    PreflightReport {
+        source: source.map(ToOwned::to_owned),
+        format,
+        exercise_count: exercises.len(),
+        issues: report.issues,
+    }
+}
+
+fn run_validation(exercises: &mut [Exercise], source: Option<&str>) -> Result<(), PraxeumError> {
+    validate_exercises_with_source(exercises, source).map_err(PraxeumError::Validation)
+}
+
+fn resolve_format(
+    path: Option<&Path>,
+    contents: &str,
+    requested: DataFormat,
+) -> Result<DataFormat, PraxeumError> {
+    match requested {
+        DataFormat::Json | DataFormat::Toml => Ok(requested),
+        DataFormat::Auto => {
+            if let Some(path) = path {
+                if let Ok(fmt) = infer_format_from_path(path) {
+                    return Ok(fmt);
+                }
+            }
+            infer_format_from_str(contents)
+        }
+    }
+}
+
+fn parse_exercises(contents: &str, format: DataFormat) -> Result<Vec<Exercise>, PraxeumError> {
+    match format {
+        DataFormat::Json => parse_json(contents),
+        DataFormat::Toml => parse_toml(contents),
+        DataFormat::Auto => unreachable!(),
+    }
+}
+
+fn parse_json(contents: &str) -> Result<Vec<Exercise>, PraxeumError> {
+    if contents.trim_start().starts_with('[') {
+        serde_json::from_str::<Vec<Exercise>>(contents).map_err(PraxeumError::from)
+    } else {
+        #[derive(Deserialize)]
+        struct JsonRoot {
+            exercises: Vec<Exercise>,
+        }
+        let root: JsonRoot = serde_json::from_str(contents)?;
+        Ok(root.exercises)
+    }
+}
+
+fn parse_toml(contents: &str) -> Result<Vec<Exercise>, PraxeumError> {
+    let root: TomlRoot = toml::from_str(contents)?;
+    Ok(root.exercise)
+}
+
+fn infer_format_from_path(path: &Path) -> Result<DataFormat, PraxeumError> {
     match path
         .extension()
         .and_then(|os| os.to_str())
@@ -81,6 +190,27 @@ fn infer_format(path: &Path) -> Result<DataFormat, PraxeumError> {
         "toml" | "tml" => Ok(DataFormat::Toml),
         _ => Err(PraxeumError::UnsupportedFormat),
     }
+}
+
+fn infer_format_from_str(contents: &str) -> Result<DataFormat, PraxeumError> {
+    let trimmed = contents.trim_start();
+    if trimmed.starts_with('{') {
+        return Ok(DataFormat::Json);
+    }
+
+    if trimmed.starts_with('[') {
+        if trimmed.starts_with("[[exercise]") {
+            return Ok(DataFormat::Toml);
+        }
+        // Heuristic: if we see colons near the top, assume JSON; otherwise TOML array-of-tables.
+        let looks_like_json = trimmed.contains(":") && trimmed.contains("\"");
+        if looks_like_json {
+            return Ok(DataFormat::Json);
+        }
+        return Ok(DataFormat::Toml);
+    }
+
+    Ok(DataFormat::Toml)
 }
 
 /// Utility to resolve a default exercises path (for CLI demos).

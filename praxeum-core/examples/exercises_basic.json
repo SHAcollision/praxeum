@@ -1,0 +1,114 @@
+{
+  "exercises": [
+    {
+      "kind": "classification",
+      "id": "intro_action_event_rally",
+      "title": "Action vs Event: Lightning Round",
+      "prompt": "Drop each statement into the right zone: purposeful action or mere event.",
+      "categories": ["action", "event"],
+      "items": [
+        {"text": "Alice flips a coin to decide whether to quit her job.", "correct_category": "action"},
+        {"text": "A rock rolls down a hill.", "correct_category": "event"},
+        {"text": "Bob buys a coffee to stay awake during a study session.", "correct_category": "action"},
+        {"text": "A volcano erupts and showers ash on a town.", "correct_category": "event"},
+        {"text": "Carla absentmindedly taps her foot to music.", "correct_category": "event"},
+        {"text": "Derek slams the door to signal he’s angry.", "correct_category": "action"},
+        {"text": "Rain floods the training field.", "correct_category": "event"},
+        {"text": "Eve ducks under a flying frisbee before it hits her.", "correct_category": "action"},
+        {"text": "Jae sleepwalks into the hallway.", "correct_category": "event"},
+        {"text": "Lena sprints for the bus after checking the schedule.", "correct_category": "action"}
+      ]
+    },
+    {
+      "kind": "multiple_choice",
+      "id": "means_ends_match",
+      "title": "Means–Ends Match",
+      "prompt": "Crusoe’s goals: stay warm, fish more tomorrow, impress Friday. Last turn he chose B: gather firewood. Which read is praxeologically sound?",
+      "options": [
+        "He revealed B ≻ A and B ≻ C at that moment; it’s ordinal, not about his feelings’ intensity.",
+        "He proved he cares more about impressing Friday than survival, because firewood is social signaling.",
+        "You can now rank his happiness in utils: firewood = 10, net = 8, nap = 1.",
+        "The choice is random noise; without a survey we learn nothing."
+      ],
+      "correct_indices": [0],
+      "multi_select": false
+    },
+    {
+      "kind": "multiple_choice",
+      "id": "opp_cost_snap",
+      "title": "Opportunity Cost Snap",
+      "prompt": "You have one hour before a flight: study econ notes, call a friend, or scroll social media. You called a friend. What’s the opportunity cost?",
+      "options": [
+        "The next-best forgone option—whatever you ranked just below calling—probably studying.",
+        "All other options you didn’t pick, lumped together.",
+        "Only the money you didn’t earn while chatting.",
+        "There is no cost because chatting is relaxing."
+      ],
+      "correct_indices": [0],
+      "multi_select": false
+    },
+    {
+      "kind": "scenario",
+      "id": "exchange_direct_indirect",
+      "title": "Crusoe to Market: Find the Trade Line",
+      "description": "Three castaways: A, B, C. Stocks: A has fish, B has coconuts, C has stone tools.\nWants now: A wants coconuts, B wants tools, C wants fish.",
+      "prompt": "Which move actually gets A coconuts fastest and shows the onset of indirect exchange?",
+      "choices": [
+        {
+          "label": "A trades fish directly to B for coconuts; double coincidence holds.",
+          "is_correct": true,
+          "feedback": "Correct. Direct exchange works because B wants fish and A wants coconuts—no detours needed."
+        },
+        {
+          "label": "A trades fish to C for tools, then C trades tools to B for coconuts; A waits for leftovers.",
+          "is_correct": false,
+          "feedback": "Too many steps: A could already trade directly. Indirect exchange matters when direct coincidence fails."
+        },
+        {
+          "label": "A waits for \"proto-money\" rules; no one trades until a decree arrives.",
+          "is_correct": false,
+          "feedback": "Exchange emerges from wants, not permission slips. Waiting creates no coconuts."
+        }
+      ]
+    },
+    {
+      "kind": "scenario",
+      "id": "calc_bridge_vs_housing",
+      "title": "Calculation Check: Socialist Manager",
+      "description": "You run a planning bureau. Physical data: tons of steel, labor hours, and machines. No market for capital goods—only \"social value points\" assigned by a board.\nProjects:\n- X: Monumental bridge.\n- Y: Expand housing blocks.",
+      "prompt": "Can you pick the economically best use of capital?",
+      "choices": [
+        {
+          "label": "Yes. Compare social points per ton of steel and choose the higher ratio.",
+          "is_correct": false,
+          "feedback": "Ratios of arbitrary points are not market prices. They don’t reveal opportunity costs of capital goods."
+        },
+        {
+          "label": "No. Without money prices for factors, any choice is a guess; technical data alone is not economic calculation.",
+          "is_correct": true,
+          "feedback": "Exactly. Calculation needs market prices for capital goods to compare alternatives. Otherwise you’re steering blind."
+        },
+        {
+          "label": "Partly. Use last year’s prices forever; they never go stale.",
+          "is_correct": false,
+          "feedback": "Shadow prices without live markets drift. Praxeology’s point: real prices arise from current exchange, not frozen tables."
+        }
+      ]
+    },
+    {
+      "kind": "classification",
+      "id": "intervention_cascade",
+      "title": "Intervention Cascade: Price Ceiling",
+      "prompt": "A binding price ceiling is imposed below the market-clearing price. Sort each consequence.",
+      "categories": ["logically implied", "possible but not necessary", "not implied"],
+      "items": [
+        {"text": "Chronic shortage at the controlled price.", "correct_category": "logically implied"},
+        {"text": "Non-price rationing like queues or favoritism.", "correct_category": "possible but not necessary"},
+        {"text": "A surplus piling up unsold at the controlled price.", "correct_category": "not implied"},
+        {"text": "Quality deterioration or shrinkflation to cope with the cap.", "correct_category": "possible but not necessary"},
+        {"text": "Black-market side payments emerging.", "correct_category": "possible but not necessary"},
+        {"text": "The ceiling instantly raises the market-clearing quantity.", "correct_category": "not implied"}
+      ]
+    }
+  ]
+}
