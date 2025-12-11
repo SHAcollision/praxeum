@@ -1,3 +1,4 @@
+use crate::validator::ValidationErrorReport;
 use std::io;
 use thiserror::Error;
 
@@ -17,6 +18,9 @@ pub enum PraxeumError {
 
     #[error("Invalid answer: {0}")]
     InvalidAnswer(String),
+
+    #[error("{0}")]
+    Validation(ValidationErrorReport),
 
     #[error("No exercises loaded")]
     NoExercises,
