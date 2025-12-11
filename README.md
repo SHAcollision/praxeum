@@ -14,11 +14,11 @@ Praxeum is a Rust-based learning engine for Austrian economics exercises. The co
    ```bash
    cargo build
    ```
-3. Run the interactive CLI against the bundled example set for a streak-based score chase:
+3. Run the interactive CLI against the bundled example set for a streak-based score chase (arrow keys/space/enter navigation):
    ```bash
    cargo run -p praxeum-cli
    ```
-   The CLI shows combo streaks, speed bonuses, and a session summary so you can sprint through the positions.
+   The CLI shows combo streaks, speed bonuses, arrow-key selection menus, and a session summary so you can sprint through the positions.
 4. Provide your own exercise file (TOML or JSON) with `--file`:
    ```bash
    cargo run -p praxeum-cli -- --file path/to/exercises.toml

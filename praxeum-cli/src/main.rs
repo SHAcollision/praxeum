@@ -1,8 +1,9 @@
 use clap::Parser;
+use inquire::{MultiSelect, Select};
 use praxeum_core::loader::{DataFormat, ExerciseLoader};
 use praxeum_core::model::{answer::Answer, exercise::Exercise};
 use praxeum_core::{Evaluation, ExerciseEngine};
-use std::io::{self, Write};
+use std::fmt;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -124,14 +125,12 @@ fn run_exercise(
         } => {
             println!("{}", prompt);
             println!();
-            for (i, cat) in categories.iter().enumerate() {
-                println!("  [{}] {}", i, cat);
-            }
+            println!("Use ↑ ↓ to pick a category, Enter to lock it.");
             println!();
             let mut indices = Vec::with_capacity(items.len());
             for (i, item) in items.iter().enumerate() {
-                println!("Item {}: {}", i, item.text);
-                let idx = prompt_usize("Choose category index: ")?;
+                println!("Item {}: {}", i + 1, item.text);
+                let idx = select_index(&format!("Category for item {}", i + 1), categories)?;
                 indices.push(idx);
             }
             let answer = Answer::Classification(indices);
@@ -146,17 +145,11 @@ fn run_exercise(
         } => {
             println!("{}", prompt);
             println!();
-            for (i, opt) in options.iter().enumerate() {
-                println!("  [{}] {}", i, opt);
-            }
-            println!();
-            if *multi_select {
-                println!("Enter one or more indices separated by commas:");
+            let indices = if *multi_select {
+                multi_pick_indices("Pick all correct answers", options)?
             } else {
-                println!("Enter a single index:");
-            }
-            let line = prompt_line("Your choice(s): ")?;
-            let indices = parse_indices(&line);
+                vec![select_index("Pick your answer", options)?]
+            };
             let answer = Answer::MultipleChoice(indices);
             engine.evaluate(exercise, &answer)?
         }
@@ -171,10 +164,12 @@ fn run_exercise(
             println!();
             println!("{}", prompt);
             println!();
-            for (i, choice) in choices.iter().enumerate() {
-                println!("  [{}] {}", i, choice.label);
-            }
-            let idx = prompt_usize("\nChoose option index: ")?;
+            let choice_labels: Vec<String> = choices
+                .iter()
+                .enumerate()
+                .map(|(i, c)| format!("[{}] {}", i + 1, c.label))
+                .collect();
+            let idx = select_index("Choose option", &choice_labels)?;
             let answer = Answer::Scenario(idx);
             engine.evaluate(exercise, &answer)?
         }
@@ -188,31 +183,54 @@ fn run_exercise(
     Ok((eval, elapsed))
 }
 
-fn prompt_line(prompt: &str) -> io::Result<String> {
-    print!("{}", prompt);
-    io::stdout().flush()?;
-    let mut buf = String::new();
-    io::stdin().read_line(&mut buf)?;
-    Ok(buf.trim().to_string())
+#[derive(Clone)]
+struct ChoiceItem {
+    label: String,
+    index: usize,
 }
 
-fn prompt_usize(prompt: &str) -> io::Result<usize> {
-    loop {
-        let line = prompt_line(prompt)?;
-        match line.parse::<usize>() {
-            Ok(n) => return Ok(n),
-            Err(_) => {
-                println!("Invalid integer, try again.");
-            }
-        }
+impl fmt::Display for ChoiceItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.label)
     }
 }
 
-fn parse_indices(input: &str) -> Vec<usize> {
-    input
-        .split([',', ' ', ';'])
-        .filter_map(|s| s.trim().parse::<usize>().ok())
-        .collect()
+fn select_index(prompt: &str, options: &[String]) -> Result<usize, Box<dyn std::error::Error>> {
+    let items: Vec<ChoiceItem> = options
+        .iter()
+        .enumerate()
+        .map(|(i, text)| ChoiceItem {
+            label: format!("[{}] {}", i + 1, text),
+            index: i,
+        })
+        .collect();
+
+    let picked = Select::new(prompt, items)
+        .with_help_message("Use ↑ ↓ to navigate, Enter to confirm")
+        .prompt()?;
+
+    Ok(picked.index)
+}
+
+fn multi_pick_indices(
+    prompt: &str,
+    options: &[String],
+) -> Result<Vec<usize>, Box<dyn std::error::Error>> {
+    let items: Vec<ChoiceItem> = options
+        .iter()
+        .enumerate()
+        .map(|(i, text)| ChoiceItem {
+            label: format!("[{}] {}", i + 1, text),
+            index: i,
+        })
+        .collect();
+
+    let picked = MultiSelect::new(prompt, items)
+        .with_help_message("Space to toggle, Enter to submit")
+        .with_vim_mode(true)
+        .prompt()?;
+
+    Ok(picked.into_iter().map(|item| item.index).collect())
 }
 
 fn award_points(eval: &Evaluation, elapsed: Duration, streak: usize) -> u32 {
