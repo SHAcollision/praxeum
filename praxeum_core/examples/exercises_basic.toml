@@ -1,0 +1,65 @@
+# Example TOML exercise set demonstrating the three exercise kinds.
+
+[[exercise]]
+kind = "classification"
+id = "intro_action_event"
+title = "Action vs Event"
+prompt = "Classify each statement as purposeful action or mere event."
+categories = ["action", "event"]
+
+[[exercise.items]]
+text = "Alice flips a coin to decide whether to quit her job."
+correct_category = "action"
+
+[[exercise.items]]
+text = "A rock rolls down a hill."
+correct_category = "event"
+
+[[exercise.items]]
+text = "Bob buys a coffee to stay awake during a study session."
+correct_category = "action"
+
+[[exercise.items]]
+text = "A volcano erupts and destroys a village."
+correct_category = "event"
+
+[[exercise]]
+kind = "multiple_choice"
+id = "intro_opportunity_cost"
+title = "Opportunity Cost Basics"
+prompt = "What is the opportunity cost of choosing one action over another?"
+options = [
+  "The total set of all things you did not do.",
+  "The value of the next-best alternative forgone.",
+  "The amount of money you spent.",
+  "The regret you feel afterward."
+]
+correct_indices = [1]
+multi_select = false
+
+[[exercise]]
+kind = "scenario"
+id = "calc_bridge_vs_housing"
+title = "Calculation Problem: Bridge vs Housing"
+description = """
+You are a planner choosing between two projects:
+- Project X: Build a monumental bridge.
+- Project Y: Expand housing inventory.
+
+You have physical data (tons of steel, labor hours) but no genuine market prices for capital goods.
+"""
+prompt = "From a Misesian calculation perspective, what can you say about your choice?"
+[[exercise.choices]]
+label = "You can rationally calculate because you have physical quantities and engineering know-how."
+is_correct = false
+feedback = "Praxeology: technical feasibility is not economic calculation. Without market prices for capital goods, you cannot compare alternative uses in terms of opportunity cost."
+
+[[exercise.choices]]
+label = "You are guessing; without money prices for capital goods, there is no genuine economic calculation."
+is_correct = true
+feedback = "Correct. The problem is the absence of money prices for factors of production, not the lack of data or goodwill."
+
+[[exercise.choices]]
+label = "You can rely on 'social value points' assigned by a board as a perfect substitute for prices."
+is_correct = false
+feedback = "These 'points' merely relocate the judgment problem; they are not emergent from exchange and do not solve the calculation issue."
